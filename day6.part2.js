@@ -3,7 +3,7 @@ var MAX_DISTANCE = 10000;
 (async () => {
   var input = await fetch("https://adventofcode.com/2018/day/6/input")
     .then(response => response.text())
-	.then(text => text.split("\n")
+	  .then(text => text.split("\n")
 		.filter(i => i.length > 1)
 		.map(i => ({
 		    x: +i.match(/(?<x>\d+),\s(?<y>\d+)/).groups.x,
