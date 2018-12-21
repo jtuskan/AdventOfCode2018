@@ -329,86 +329,118 @@ function Graph(serialized) {
   return graph;
 }
 
-var numberOfWorkers = 5;
-(async () => {
-  var input = await fetch("https://adventofcode.com/2018/day/7/input")
-    .then(response => response.text());
-  var steps = input
-    .split("\n")
-    .filter(i => i.length > 0)
-    .map(i => ({
-      completed: false,
-      ...i.match(/Step (?<A>[A-Z]) must be finished before step (?<B>[A-Z]) can begin\./).groups
-    }));
-
-  var graph = Graph();
-  var working = [];
-  var waiting = [];
-  var starts = steps.map(i => i.A).filter(x => steps.map(i => i.B).indexOf(x) < 0).filter((x, i, a) => a.indexOf(x) === i).sort();
-  var workers = new Array(numberOfWorkers).fill('').map(i => ({
-    busy: false,
-    time: 0,
-    node: "."
-  }));
-  steps.forEach(step => graph.addEdge(step.A, step.B));
-  var solution = graph.topologicalSort();
-  
-  console.log(solution);
-  var completed = [];
-  var processNodes = (availableWorkers, starts) => {
-    if (availableWorkers.length > 0) {
-      if (starts.length > 0) {
-        var work = starts.filter(i => working.indexOf(i) === -1 && waiting.indexOf(i) === -1).splice(0, availableWorkers.length);
-        work.forEach((node, index) => {
-          var worker = availableWorkers[index]
-          worker.busy = true;
-          worker.node = node;
-          worker.time = node.charCodeAt(0) - 64;
-          working.push(node);
-		  starts.splice(starts.indexOf(node), 1)
-        });
-      }
+const solver = (workLimit=5, queues={ worker: [], eligible: [] }, completed=0, duration=0, taskMap) => {
+  let abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  if (taskMap === undefined) {
+    taskMap = {};
+    for (let i = 0; i < abc.length; i++) {
+      taskMap[abc[i]] = {
+        val: abc[i],
+        timeRemaining: 60 + i + 1,
+        prereq: [],
+        precede: [],
+      };
     }
-    return starts;
-  };
-
-  var tick = 0;
-  var done = '';
-  console.log(graph);
-  while (solution.length && tick < 200) {
-    starts = processNodes(workers.filter(i => !i.busy), starts);
-	console.log(starts, working, waiting);
-    if (completed.length > 0 && starts.length === 0) {
-      while (completed.length && workers.some(i => !i.busy)) {
-        var node = completed.splice(0, 1)[0];
-        var adjacents = graph.adjacent(node).sort().concat();
-        starts = processNodes(workers.filter(i => !i.busy), adjacents.concat());
-        adjacents.forEach(i => {
-          waiting = waiting.concat(graph.adjacent(i).concat());
-        })
-      }
-    }
-    
-    console.log(`${tick++}\t${workers.map(i => i.node).join(`\t`)}\t${done}`);
-    workers.forEach(worker => {
-      worker.time--;
-      if (worker.time <= 0 && worker.busy) {
-        var node = solution.splice(solution.indexOf(worker.node), 1);
-		working.splice(working.indexOf(worker.node), 1);
-        worker.busy = false;
-        worker.node = ".";
-        done += node[0];
-        var adjacents = graph.adjacent(node[0]).concat();
-        adjacents
-			.filter(i => waiting.indexOf(i) !== -1)
-			.forEach(i => {
-				waiting.splice(waiting.indexOf(i), 1);
-        	});
-        completed = completed.concat(node);
-      }
-
+    document.body.childNodes[0].innerHTML.trim().split('\n').forEach((taskStr) => {
+      let taskInfo = taskStr.split(' ');
+      let prereq = taskInfo[1];
+      let precede = taskInfo[7];
+      taskMap[prereq].precede.push(precede);
+      taskMap[precede].prereq.push(prereq);
     });
-    
   }
-	console.log(`${tick++}\t${workers.map(i => i.node).join(`\t`)}\t${done}`);
-})();
+
+  let { worker, eligible } = queues;
+  if (completed === abc.length) {
+    return duration;
+  }
+
+  worker.sort((a,b) => a.timeRemaining - b.timeRemaining);
+  let next = worker.shift();
+  if (next !== undefined) {
+    let { timeRemaining, precede } = next;
+    completed++;
+    duration += timeRemaining;
+    precede.forEach((task) => {
+      let index = taskMap[task].prereq.indexOf(next.val);
+      index >= 0 && taskMap[task].prereq.splice(index, 1);
+    });
+    worker.forEach((task) => task.timeRemaining -= timeRemaining);
+  }
+
+  for (let letter in taskMap) {
+    if (taskMap[letter].prereq.length === 0) {
+      eligible.push(taskMap[letter]);
+      delete taskMap[letter];
+    }
+  }
+
+  while (worker.length < workLimit) {
+    eligible.sort((a,b) => a.val - b.val);
+    let nextEligible = eligible.shift();
+    if (nextEligible) {
+      worker.push(nextEligible)
+    } else {
+      break;
+    }
+  }
+
+  return solver(workLimit, queues, completed, duration, taskMap)
+}
+
+
+/*
+Starting A at 0
+Starting D at 0
+Starting E at 0
+Starting F at 0
+61 A
+Starting V at 61
+64 D
+Starting L at 64
+Starting X at 64
+65 E
+66 F
+Starting K at 66
+136 L
+137 K
+Starting B at 137
+143 V
+Starting J at 143
+Starting Q at 143
+148 X
+199 B
+Starting W at 199
+213 J
+220 Q
+282 W
+Starting C at 282
+Starting U at 282
+345 C
+363 U
+Starting N at 363
+Starting O at 363
+437 N
+Starting G at 437
+438 O
+Starting R at 438
+504 G
+Starting T at 504
+516 R
+584 T
+Starting M at 584
+657 M
+Starting Y at 657
+742 Y
+Starting S at 742
+821 S
+Starting I at 821
+890 I
+Starting H at 890
+958 H
+Starting P at 958
+1034 P
+Starting Z at 1034
+1120 Z
+1120
+*/
